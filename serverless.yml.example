@@ -1,0 +1,70 @@
+# Welcome to serverless. Read the docs
+# https://serverless.com/framework/docs/
+
+# Serverless.yml is the configuration the CLI
+# uses to deploy your code to your provider of choice
+
+#OKTA WORKFLOWS ON-PREMISE LDAP EXAMPLE: HOW TO USE
+#Read the comments for where you need to customize these settings.
+#Any parameters wrapped in <<>> need updating with your values. The values there are just samples.
+#When deployed, this will create the following things in your AWS environment:
+#1- A lambda function that performs basic LDAP searches.
+#2- An API gateway that will expose the lambda function in a secure way, using Okta OAuth2 security.
+#3- Permissions for the lambda to access your encrypted/stored LDAP password in AWS parameter store.
+
+# Enter in the desired name of your service here if you wish to change it. 
+# This will determine your API endpoint name and name of the Lambda function.
+service: ldap-reference-example
+
+# The `provider` block defines where your service will be deployed
+provider:
+  name: aws
+  runtime: nodejs12.x
+  region: us-east-1
+  httpApi:
+    authorizers:
+		# Update the issuerUrl and the audience to match your OAuth2 authorizer.
+        oktaJwtAuthorizer:
+            identitySource: $request.header.Authorization
+            issuerUrl: <<https://youroktaorg.okta.com/oauth2/default>>
+            audience:
+                - <<api://default>>
+  logs:
+    httpApi: true
+
+# Setup your LDAP configuration here. 
+  environment:
+    LDAP_HOST: <<ldaphost.sampleorg.local>>
+    SEARCH_BASE: <<CN=Users,DC=sampleorg,DC=local>>
+    RETURN_ATTRIBUTES: userprincipalname,samaccountname,givenname,sn
+    BIND_DN: <<CN=admin,CN=Users,DC=sampleorg,DC=local>>
+    BIND_PW_PARAM_NAME: ldap_pw
+
+#This section provides access for the lambda to retrieve the encrypted password from parameter store.
+#Update the ARN for your parameter store below.    
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Action:
+        - 'ssm:GetParameter'
+      Resource:
+        - <<arn:aws:ssm:awsregionhere:awsaccountnumberhere:parameter/ldap_pw>>
+
+# The `functions` block defines what code to deploy
+#Need to provide the lambda access to your LDAP server by setting security group and subnet properly.
+functions:         
+  searchLdap:
+    handler: handler.searchLdap
+    vpc:
+      securityGroupIds:
+        - <<Security group with access to your LDAP server here>>
+      subnetIds:
+        - <<Same subnet as your LDAP server here>>
+ 
+    events:
+      - httpApi:
+          path: /searchLdap
+          method: GET
+          authorizer:
+            name: oktaJwtAuthorizer
+            scopes: ldap.read
+          
