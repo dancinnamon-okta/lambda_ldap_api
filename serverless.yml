@@ -5,20 +5,53 @@
 # uses to deploy your code to your provider of choice
 
 # The `service` block is the name of the service
-service: ldap-lookup
+service: ldap-reference-example
 
 # The `provider` block defines where your service will be deployed
 provider:
   name: aws
   runtime: nodejs12.x
   region: us-east-1
+  httpApi:
+    authorizers:
+        oktaJwtAuthorizer:
+            identitySource: $request.header.Authorization
+            issuerUrl: https://danc-workflow.oktapreview.com/oauth2/default
+            audience:
+                - api://default
+  logs:
+    httpApi: true
+  
+  environment:
+    LDAP_HOST: 172.31.29.246
+    SEARCH_BASE: OU=zimt people,DC=zimt,DC=us
+    RETURN_ATTRIBUTES: userprincipalname,samaccountname,givenname,sn
+    BIND_DN: CN=LDAP API,CN=Users,DC=zimt,DC=us
+    BIND_PW_PARAM_NAME: ldap_pw
+    
+  iamRoleStatements:
+    - Effect: 'Allow'
+      Action:
+        - 'ssm:GetParameter'
+      Resource:
+        - 'arn:aws:ssm:us-east-1:870383834441:parameter/ldap_pw'
 
 # The `functions` block defines what code to deploy
+#Remember that we need to create the VPC endpoints for SSM.
 functions:         
   searchLdap:
     handler: handler.searchLdap
+    vpc:
+      securityGroupIds:
+        - sg-059b384dae2cb26bb
+      subnetIds:
+        - subnet-124de958
+ 
     events:
-      - http:
-          path: search-ldap-lookup
-          method: get
+      - httpApi:
+          path: /searchLdap
+          method: GET
+          authorizer:
+            name: oktaJwtAuthorizer
+            scopes: ldap.read
           
