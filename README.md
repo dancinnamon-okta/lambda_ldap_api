@@ -21,7 +21,7 @@ Running queries against an AWS hosted LDAP repository for reference use in Okta 
 - A security group that allows TCP 389 and 636 to the LDAP server
 
 - VPC endpoints that represent access to the AWS SSM parameter store within your subnet (https://aws.amazon.com/premiumsupport/knowledge-center/lambda-vpc-parameter-store/)
-  - Note: these endpoints must be assigned a security group that allow inbound HTTPS access.
+  - Note: these endpoints must be assigned a security group that allow inbound HTTPS access (inbound to the endpoint- that is).
   
 ## Quick Start
 
@@ -48,7 +48,7 @@ $ cp serverless.yml.example serverless.yml
 - Security Group ID(s): Provide the ID of a security group that has access to the LDAP server over port 389/636.
 - Subnet ID: Provide the ID of the subnet that the LDAP server is in.
 
-2.  Install serverless via npm
+3.  Install serverless via npm
 
 ```bash=
 $ npm install -g serverless
@@ -78,8 +78,56 @@ Serverless: Stack update finished...
 ```
 
 ## Okta Setup
-TODO
-- [Okta developer account](https://developer.okta.com/).
+If you need an Okta tenant, [Sign up here](https://developer.okta.com/).
+
+1. Create an OIDC application in Okta that Workflows will use as a client.
+  - Application Type = web
+
+  - Set the redirect URI = https://oauth.workflows.oktapreview.com/oauth/httpfunctions/cb
+
+  - Set allow authorization code and refresh tokens
+
+  - Ensure the application is assigned to the administrator configuring your workflow.
+
+2. Create an authorization server, and create the ldap.read scope on that authorization server.
+ ** Note - the "audience" parameter you use must be the same as the "Audience" used in the serverless.yml file you updated in step 2.
+
+## Okta Workflows Setup
+TODO: provide flopack
+
+1. Create an HTTP connection, using the OAuth2 protocol for security.
+
+2. In the applicable workflow, update the HTTP card to use the new connection.
+
 
 ## Usage
-TODO
+When the API deploys, you'll receive an HTTP API endpoint available at /searchLdap that will serve up the LDAP directory in a readonly fashion.
+You simply need to invoke this endpoint with an HTTP GET request, with your LDAP search criteria in the "q" querystring variable.
+
+Example:
+https://api/searchLdap?q=(samaccountname=demo*) to pull back all objects with a samaccountname starting with "demo".
+
+Example response:
+```json
+{
+  "users": [
+    {
+      "name": "CN=Dan Cinnamon,OU=zimt people,DC=zimt,DC=us",
+      "sn": [
+        "Cinnamon"
+      ],
+      "givenName": [
+        "Dan"
+      ],
+      "sAMAccountName": [
+        "DanCinnamon"
+      ],
+      "userPrincipalName": [
+        "dan.cinnamon@zimt.us"
+      ]
+    }
+  ],
+  "userCount": 1,
+  "message": "Search Successful!"
+}
+```
